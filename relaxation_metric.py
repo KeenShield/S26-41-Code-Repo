@@ -46,6 +46,7 @@ shutdown_requested = False # to allow the user or operator to exit session / sto
 # globals to store session relaxation data in the GUI
 session_time_data = []
 session_metric_data = []
+session_media_data = []
 
 current_bands = [0, 0, 0, 0, 0]   # delta theta alpha beta gamma stored globally for use in gui
 
@@ -754,11 +755,12 @@ if __name__ == "__main__":
         fig2 = Figure()
         canvas2 = FigureCanvas(fig2)
 
-        ax2 = fig2.add_subplot(111)
-        #ax2.plot(session_time_data, [get_system_volume_percent()] * len(session_time_data))
-        ax2.set_title("Audio vs Time")
+        ax2.plot(session_time_data, session_media_data, drawstyle='steps-post')
+        ax2.set_title("Audio Selection vs Time")
         ax2.set_xlabel("Seconds")
-        ax2.set_ylabel("Volume %")
+        ax2.set_ylabel("Audio")
+        ax2.set_yticks([0,1,2,3])
+        ax2.set_yticklabels(["Flute", "Night", "Distortion", "Waterfall"])
 
         layout2 = QtWidgets.QVBoxLayout(stats_ui.AudioVsTime)
         layout2.addWidget(canvas2)
@@ -804,7 +806,7 @@ if __name__ == "__main__":
      session_seconds += 1
      session_time_data.append(session_seconds)
      session_metric_data.append(current_metric)
-
+     session_media_data.append(pos) 
     
     def update_volume_bar():
         ui.VolumeBar.setValue(vol_sys)
