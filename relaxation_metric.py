@@ -36,6 +36,9 @@ import sys
 current_metric = 0.0
 vol_sys = 0
 pos = 0
+PLAYBACK_MODE = False
+playback_index = 0
+
 videos = []
 video = None
 # for active channels
@@ -815,6 +818,16 @@ if __name__ == "__main__":
     
     def update_volume_bar():
         ui.VolumeBar.setValue(vol_sys)
+
+    def play_next_frame():
+        global playback_index, current_metric, current_bands, vol_sys, pos
+    
+        current_metric = session_metric_data[playback_index]
+        vol_sys = session_volume_data[playback_index]
+        pos = session_media_data[playback_index]
+        current_bands = session_band_data[playback_index]
+
+    playback_index += 1
 
     # Progress bar
     
