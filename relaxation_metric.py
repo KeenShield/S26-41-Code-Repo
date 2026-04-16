@@ -36,10 +36,10 @@ import sys
 current_metric = 0.0
 vol_sys = 0
 pos = 0
+videos = []
 PLAYBACK_MODE = False
 playback_index = 0
 
-videos = []
 video = None
 # for active channels
 channel_model = None
@@ -51,7 +51,7 @@ session_time_data = []
 session_metric_data = []
 session_media_data = []
 session_band_data = []
-
+session_volume_data = []
 
 current_bands = [0, 0, 0, 0, 0]   # delta theta alpha beta gamma stored globally for use in gui
 
@@ -701,9 +701,10 @@ if __name__ == "__main__":
 
         # Calculations
         total_time = session_seconds
+        total_minutes = round(total_time / 60)
 
         relaxed_points = sum(1 for x in session_metric_data if x > 0.7)
-        time_relaxed = relaxed_points * 5   # logged every 5 sec
+        time_relaxed = relaxed_points    # logged every second
 
         avg_metric = 0
         if len(session_metric_data) > 0:
@@ -721,13 +722,13 @@ if __name__ == "__main__":
 
         stats_ui.SessionDurationLabel.setText(
             f"<html><body><p><span style='font-size:16pt;'>"
-            f"Session Duration: {total_time}s"
+            f"Session Duration: {total_minutes:02d}:{total_time%60:02d}"
             f"</span></p></body></html>"
         )
 
         stats_ui.YourTimeRelaxedLabel.setText(
             f"<html><body><p><span style='font-size:16pt;'>"
-            f"Your Time Relaxed: {time_relaxed}s"
+            f"Your Time Relaxed: {round(time_relaxed / 60):02d}:{time_relaxed%60:02d}"
             f"</span></p></body></html>"
         )
 
@@ -759,13 +760,17 @@ if __name__ == "__main__":
         # Audio vs Time graph
         fig2 = Figure()
         canvas2 = FigureCanvas(fig2)
-
-        ax2.plot(session_time_data, session_media_data, drawstyle='steps-post')
+        
+        ax2 = fig2.add_subplot(111)
+        ax2.plot(session_time_data,session_media_data,drawstyle='steps-post')
         ax2.set_title("Audio Selection vs Time")
         ax2.set_xlabel("Seconds")
         ax2.set_ylabel("Audio")
         ax2.set_yticks([0,1,2,3])
         ax2.set_yticklabels(["Flute", "Night", "Distortion", "Waterfall"])
+
+
+
 
         layout2 = QtWidgets.QVBoxLayout(stats_ui.AudioVsTime)
         layout2.addWidget(canvas2)
@@ -806,31 +811,30 @@ if __name__ == "__main__":
      ui.Time.display(f"{elapsed_minutes:02d}:{elapsed_seconds:02d}")
 
     # function to log relaxation every second  
-   def log_metric():
-    global session_seconds
+    def log_metric():
+     global session_seconds
 
-    session_seconds += 1
+     session_seconds += 1
 
-    session_time_data.append(session_seconds)
-    session_metric_data.append(current_metric)
-    session_band_data.append(current_bands.copy())
-    session_media_data.append(pos)
+     session_time_data.append(session_seconds)
+     session_metric_data.append(current_metric)
+     session_media_data.append(audio_names[pos])
+     session_band_data.append(current_bands.copy())
+
+
     
     def update_volume_bar():
         ui.VolumeBar.setValue(vol_sys)
 
+    # Progress bar
     def play_next_frame():
         global playback_index, current_metric, current_bands, vol_sys, pos
-    
+
         current_metric = session_metric_data[playback_index]
         vol_sys = session_volume_data[playback_index]
         pos = session_media_data[playback_index]
         current_bands = session_band_data[playback_index]
-
-    playback_index += 1
-
-    # Progress bar
-    
+        playback_index += 1
 
 
     def update_gui():
@@ -890,7 +894,7 @@ if __name__ == "__main__":
     #update gui timer
     timer.timeout.connect(update_gui)
     timer.start(200)
-    # log timer
+    # log timer for the relaxation metric
     log_timer = QtCore.QTimer()
     log_timer.timeout.connect(log_metric)
     log_timer.start(1000)
