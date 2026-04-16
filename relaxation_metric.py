@@ -47,6 +47,8 @@ shutdown_requested = False # to allow the user or operator to exit session / sto
 session_time_data = []
 session_metric_data = []
 session_media_data = []
+session_band_data = []
+
 
 current_bands = [0, 0, 0, 0, 0]   # delta theta alpha beta gamma stored globally for use in gui
 
@@ -801,12 +803,15 @@ if __name__ == "__main__":
      ui.Time.display(f"{elapsed_minutes:02d}:{elapsed_seconds:02d}")
 
     # function to log relaxation every second  
-    def log_metric():
-     global session_seconds
-     session_seconds += 1
-     session_time_data.append(session_seconds)
-     session_metric_data.append(current_metric)
-     session_media_data.append(pos) 
+   def log_metric():
+    global session_seconds
+
+    session_seconds += 1
+
+    session_time_data.append(session_seconds)
+    session_metric_data.append(current_metric)
+    session_band_data.append(current_bands.copy())
+    session_media_data.append(pos)
     
     def update_volume_bar():
         ui.VolumeBar.setValue(vol_sys)
