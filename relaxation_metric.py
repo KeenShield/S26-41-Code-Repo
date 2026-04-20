@@ -542,7 +542,7 @@ if __name__ == "__main__":
 
 
  ## GUI CODE EXTENDED !
- ## GUI CODE EXTENDED !
+
  
 
     # Start EEG streaming in background thread
@@ -553,17 +553,26 @@ if __name__ == "__main__":
     from PyQt5 import QtGui
 
     
-
+    
     # For the active channel display, use the number of samples to determine if a channel is active or not
 
     ui.setupUi(MainWindow) # allows for the setup from ActualUI.py to be used in this file
+    old_widget= MainWindow.centralWidget()
+
+    scroll = QtWidgets.QScrollArea()
+    scroll.setWidget(old_widget)
+    scroll.setWidgetResizable(False)
+
+    scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+    scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+    MainWindow.setCentralWidget(scroll)
+
+    old_widget.adjustSize()
 
     screen = app.primaryScreen().availableGeometry()
- 
-    w = min(1200, int(screen.width()*0.95))
-    h = min(850, int(screen.height()*0.95))
-    
-    MainWindow.resize(w, h)
+    MainWindow.resize(int(screen.width()*0.9), int(screen.height()*0.9)) 
+
+    #MainWindow.show()
     audio_names = [
         "Flute Audio",
         "Night Audio",
@@ -701,10 +710,7 @@ if __name__ == "__main__":
             import csv
             from datetime import datetime
         
-            filename = os.path.join(
-                       os.path.expanduser("~/Downloads"),
-                       datetime.now().strftime("session_%Y%m%d_%H%M%S.csv")
-                   )
+            filename = datetime.now().strftime("session_%Y%m%d_%H%M%S.csv")
         
             with open(filename, "w", newline="") as f:
                 writer = csv.writer(f)
@@ -735,8 +741,8 @@ if __name__ == "__main__":
                     ])
         
             print(f"Saved {filename}")
-        stats_ui.DownloadButton.pressed.connect(save_csv)
         
+
         global shutdown_requested
 
         # close main window
@@ -748,7 +754,21 @@ if __name__ == "__main__":
         stats_ui = StatsUI()
         stats_ui.setupUi(stats_window)
 
-        # Calculations
+        old_widget_stats = stats_window.centralWidget()
+
+        stats_scroll = QtWidgets.QScrollArea()
+        stats_scroll.setWidget(old_widget_stats)
+        stats_scroll.setWidgetResizable(False)
+
+        stats_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        stats_scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        stats_window.setCentralWidget(scroll)
+
+        old_widget_stats.adjustSize()
+
+        screen = app.primaryScreen().availableGeometry()
+        stats_window.resize(int(screen.width()*0.9), int(screen.height()*0.9)) 
+            # Calculations
         total_time = session_seconds
         total_minutes = round(total_time / 60)
 
@@ -803,7 +823,7 @@ if __name__ == "__main__":
             f"Most Engaging Audio: {best_audio}"
             f"</span></p></body></html>"
         )
-
+        
         # Relaxation vs time graph
         fig1 = Figure()
         canvas1 = FigureCanvas(fig1)
@@ -851,7 +871,7 @@ if __name__ == "__main__":
         stats_ref = stats_window
 
     # connect the button to the callback function above
-    ui.ExitSessionButton.pressed.connect(exit_session)
+    ui.ExitSessionButton.clicked.connect(exit_session)
 
    
     
