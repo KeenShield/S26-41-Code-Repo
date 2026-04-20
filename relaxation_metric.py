@@ -690,7 +690,43 @@ if __name__ == "__main__":
     
     # function to allow the session to be exited via button click 
     def exit_session():
+        def save_csv():
+            import csv
+            from datetime import datetime
+        
+            filename = datetime.now().strftime("session_%Y%m%d_%H%M%S.csv")
+        
+            with open(filename, "w", newline="") as f:
+                writer = csv.writer(f)
+        
+                writer.writerow([
+                    "Time_s",
+                    "Metric",
+                    "Media",
+                    "Delta",
+                    "Theta",
+                    "Alpha",
+                    "Beta",
+                    "Gamma"
+                ])
+        
+                for i in range(len(session_time_data)):
+                    bands = session_band_data[i] if i < len(session_band_data) else [None]*5
+        
+                    writer.writerow([
+                        session_time_data[i],
+                        session_metric_data[i],
+                        session_media_data[i],
+                        bands[0],
+                        bands[1],
+                        bands[2],
+                        bands[3],
+                        bands[4]
+                    ])
+        
+            print(f"Saved {filename}")
 
+ 
         global shutdown_requested
 
         # close main window
