@@ -690,6 +690,7 @@ if __name__ == "__main__":
     
     # function to allow the session to be exited via button click 
     def exit_session():
+
         global shutdown_requested
 
         # close main window
@@ -715,9 +716,20 @@ if __name__ == "__main__":
         # determine best audio from metric_scores if available
         names = ["Flute", "Night", "Visual Distortion", "Waterfall"]
 
-        try:
-            best_audio = names[pos]
-        except:
+        from collections import defaultdict 
+        audio_scores = defaultdict(list)
+        for i in range(len(session_metric_data)):
+            audio = session_media_data[i]
+            metric = session_metric_data[i]
+            audio_scores[audio].append(metric)
+
+        if len(audio_scores) > 0:
+            avg_scores = {
+                audio: sum(vals) / len(vals) 
+                for audio, vals in audio_scores.items() 
+            }
+            best_audio = max(avg_scores, key=avg_scores.get)
+        else:
             best_audio = "N/A"
 
         # Display labels
@@ -736,7 +748,7 @@ if __name__ == "__main__":
 
         stats_ui.AverageRelaxationScoreLabel.setText(
             f"<html><body><p><span style='font-size:16pt;'>"
-            f"Average Relaxation Score: {avg_metric:.2f}"
+            f"Average Relaxation Score: {avg_metric*100:.0f}%"
             f"</span></p></body></html>"
         )
 
@@ -782,9 +794,8 @@ if __name__ == "__main__":
 
         def redo_session():
             stats_window.close()
-            shutdown_requested = False
-            run_eeg()
-
+            QtWidgets.QApplication.quit()
+            os.execv(sys.executable, [sys.executable] + sys.argv)
         stats_ui.RedoSession.clicked.connect(redo_session)
 
         stats_window.show()
