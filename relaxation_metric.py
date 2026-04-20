@@ -607,9 +607,9 @@ if __name__ == "__main__":
             ui.NowShowingLabel.setText(f"Now Showing: {visual_names[pos]}")
 
     # connect buttons with playback functions defined above
-    ui.PlayButton.clicked.connect(play_media)
-    ui.StopButton.clicked.connect(stop_media)
-    ui.Cyclebutton.clicked.connect(cycle_media)
+    ui.PlayButton.pressed.connect(play_media)
+    ui.StopButton.pressed.connect(stop_media)
+    ui.Cyclebutton.pressed.connect(cycle_media)
 
 
     eeg_thread = threading.Thread(target=run_eeg, daemon=True)
@@ -701,7 +701,10 @@ if __name__ == "__main__":
             import csv
             from datetime import datetime
         
-            filename = datetime.now().strftime("session_%Y%m%d_%H%M%S.csv")
+            filename = os.path.join(
+                       os.path.expanduser("~/Downloads"),
+                       datetime.now().strftime("session_%Y%m%d_%H%M%S.csv")
+                   )
         
             with open(filename, "w", newline="") as f:
                 writer = csv.writer(f)
@@ -732,7 +735,7 @@ if __name__ == "__main__":
                     ])
         
             print(f"Saved {filename}")
-        stats_ui.DownloadButton.clicked.connect(save_csv)
+        stats_ui.DownloadButton.pressed.connect(save_csv)
         
         global shutdown_requested
 
@@ -833,13 +836,13 @@ if __name__ == "__main__":
         layout2.addWidget(canvas2)
 
         # buttons
-        stats_ui.ExitStatsButton.clicked.connect(stats_window.close)
+        stats_ui.ExitStatsButton.pressed.connect(stats_window.close)
 
         def redo_session():
             stats_window.close()
             QtWidgets.QApplication.quit()
             os.execv(sys.executable, [sys.executable] + sys.argv)
-        stats_ui.RedoSession.clicked.connect(redo_session)
+        stats_ui.RedoSession.pressed.connect(redo_session)
 
         stats_window.show()
 
@@ -848,7 +851,7 @@ if __name__ == "__main__":
         stats_ref = stats_window
 
     # connect the button to the callback function above
-    ui.ExitSessionButton.clicked.connect(exit_session)
+    ui.ExitSessionButton.pressed.connect(exit_session)
 
    
     
