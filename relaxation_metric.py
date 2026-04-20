@@ -306,7 +306,7 @@ def set_system_volume_percent(percent: int):
 
 
 
-USE_SIMULATION = True # <-- for testing the GUI, set to false when not testing
+#USE_SIMULATION = False # <-- for testing the GUI, set to false when not testing
 
 
 
@@ -410,7 +410,7 @@ def run_eeg():
             
 
             global current_metric, current_bands, vol_sys # define gloval vars for use in the GUI 
-
+            """
             if USE_SIMULATION:
                 current_metric = 0.5 + 0.4*np.sin(time.time()/5)
 
@@ -425,6 +425,7 @@ def run_eeg():
 
                 time.sleep(0.2)
                 continue
+                """
             # DO NOT DELETE 
             # this code block is for the active channel display in the GUI 
 
@@ -693,7 +694,8 @@ if __name__ == "__main__":
 
         # close main window
         MainWindow.close()
-
+        
+        shutdown_requested = True
         # Open session stats window
         stats_window = QtWidgets.QMainWindow()
         stats_ui = StatsUI()
@@ -732,13 +734,13 @@ if __name__ == "__main__":
             f"</span></p></body></html>"
         )
 
-        stats_ui.YourTimeRelaxedLabel_2.setText(
+        stats_ui.AverageRelaxationScoreLabel.setText(
             f"<html><body><p><span style='font-size:16pt;'>"
             f"Average Relaxation Score: {avg_metric:.2f}"
             f"</span></p></body></html>"
         )
 
-        stats_ui.label_3.setText(
+        stats_ui.StimulatingAudioLabel.setText(
             f"<html><body><p><span style='font-size:16pt;'>"
             f"Most Engaging Audio: {best_audio}"
             f"</span></p></body></html>"
@@ -780,8 +782,10 @@ if __name__ == "__main__":
 
         def redo_session():
             stats_window.close()
+            shutdown_requested = False
+            run_eeg()
 
-        stats_ui.ExitStatsButton_2.clicked.connect(redo_session)
+        stats_ui.RedoSession.clicked.connect(redo_session)
 
         stats_window.show()
 
