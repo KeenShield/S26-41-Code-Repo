@@ -557,6 +557,13 @@ if __name__ == "__main__":
     # For the active channel display, use the number of samples to determine if a channel is active or not
 
     ui.setupUi(MainWindow) # allows for the setup from ActualUI.py to be used in this file
+
+    screen = app.primaryScreen().availableGeometry()
+ 
+    w = min(1200, int(screen.width()*0.95))
+    h = min(850, int(screen.height()*0.95))
+    
+    MainWindow.resize(w, h)
     audio_names = [
         "Flute Audio",
         "Night Audio",
