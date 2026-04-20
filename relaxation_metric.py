@@ -379,7 +379,7 @@ def run_eeg():
     videos = [RelaxationVideo(path, screen=1) for path in video_paths]
     pos = 0
     video = videos[pos]
-    window = 50
+    window = 100
     window_metric = 0.0
     i = 0
     flag = True
@@ -394,11 +394,11 @@ def run_eeg():
     MAX_VOL = 0.9    # safe comfortable cap
 
     MIN_VOL_SYS = 20
-    MAX_VOL_SYS = 60 # edit
+    MAX_VOL_SYS = 60 # edi
 
     print(f"Sampling rate: {sampling_rate} Hz, EEG channels: {eeg_channels}")
     print("Streaming… press Ctrl+C to stop.")
-    print("Calibrating (~10 sec per tone)")
+    print("Calibrating (~20 sec per tone)")
 
     try:            
         while  not shutdown_requested:
@@ -725,8 +725,8 @@ if __name__ == "__main__":
                     ])
         
             print(f"Saved {filename}")
-
- 
+        stats_ui.DownloadButton.clicked.connect(save_csv)
+        
         global shutdown_requested
 
         # close main window
