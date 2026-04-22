@@ -30,7 +30,21 @@ from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
 # for the GUI 
 from ActualUI import Ui_MainWindow
 from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtWidgets import QScroller
+from PyQt5.QtCore import Qt 
+
+
 import sys
+
+def get_screen_geometry(app, preferred_index=0):
+    """
+    Return the geometry for a preferred Qt screen index if available.
+    Falls back to the primary screen.
+    """
+    screens = app.screens()
+    if screens and 0 <= preferred_index < len(screens):
+        return screens[preferred_index].availableGeometry()
+    return app.primaryScreen().availableGeometry()
 
 # global variable to hold the current relaxation metric (for demonstration/logging purposes)
 current_metric = 0.0
@@ -54,6 +68,9 @@ session_band_data = []
 session_volume_data = []
 
 current_bands = [0, 0, 0, 0, 0]   # delta theta alpha beta gamma stored globally for use in gui
+last_volume_percent = None
+last_active_channels = []
+last_debug_print_time = 0.0
 
 @dataclass
 class RelaxationConfig:
@@ -81,6 +98,10 @@ class RelaxationConfig:
     # Numerical safety
     eps: float = 1e-9
     denom_floor: float = 1e-6
+    band_floor: float = 1e-6
+    raw_clip_min: float = -2.5
+    raw_clip_max: float = 2.5
+    max_raw_step: float = 0.75
 
     # OpenBCI focus-style thresholds (original article thresholds are in uV amplitude;
     # here we approximate amplitude via sqrt(power))
@@ -106,6 +127,7 @@ class RelaxationMetric:
     def __init__(self, config: RelaxationConfig):
         self.cfg = config
         self._ema_value: Optional[float] = None  # exponential moving average
+        self._latest_bands: Optional[Tuple[float, float, float, float, float]] = None
 
     # ---------- internal helpers ----------
 
@@ -126,7 +148,26 @@ class RelaxationMetric:
             True  # apply_filter
         )
         # avg_bands = [delta, theta, alpha, beta, gamma]
-        return tuple(avg_bands)  # type: ignore
+        bands = tuple(avg_bands)  # type: ignore
+        self._latest_bands = bands
+        return bands
+
+    def _sanitize_bands(
+        self, delta: float, theta: float, alpha: float, beta: float, gamma: float
+    ) -> Tuple[float, float, float, float, float]:
+        """
+        Keep band powers finite and above a small floor so one bad window does not
+        explode the log-ratio calculation.
+        """
+        floor = self.cfg.band_floor
+        vals = [delta, theta, alpha, beta, gamma]
+        cleaned = []
+        for v in vals:
+            if not math.isfinite(v):
+                cleaned.append(floor)
+            else:
+                cleaned.append(max(float(v), floor))
+        return tuple(cleaned)  # type: ignore
 
     # raw relaxation ratio: (alpha + theta) / (alpha + theta + beta + gamma)
     # determine how much the "relaxation" bands (alpha, theta) dominate over the "arousal" bands (beta, gamma)
@@ -137,6 +178,7 @@ class RelaxationMetric:
         """Compute the raw (pre-smoothing) value according to cfg.metric_mode."""
 
         eps = self.cfg.eps
+        delta, theta, alpha, beta, gamma = self._sanitize_bands(delta, theta, alpha, beta, gamma)
 
         if self.cfg.metric_mode == "log_ab":
             # More stable than a ratio; reduces blow-ups when beta gets very small.
@@ -149,6 +191,22 @@ class RelaxationMetric:
         denom = relax + arousal
         denom = max(denom, self.cfg.denom_floor)
         return relax / denom
+    def _stabilize_raw(self, raw: float) -> float:
+        """
+        Clip extreme raw values and limit one-window jumps so brief artifacts do not
+        slam the metric to 0 or 1.
+        """
+        raw = max(self.cfg.raw_clip_min, min(self.cfg.raw_clip_max, raw))
+        if self._ema_value is None:
+            return raw
+
+        delta = raw - self._ema_value
+        max_step = self.cfg.max_raw_step
+        if delta > max_step:
+            raw = self._ema_value + max_step
+        elif delta < -max_step:
+            raw = self._ema_value - max_step
+        return raw
 
 
 
@@ -217,31 +275,31 @@ class RelaxationMetric:
         if data_window is None:
             raise ValueError("data_window cannot be None")
 
-        delta, theta, alpha, beta, gamma = self._compute_band_powers(data_window)
+        if self._latest_bands is None:
+            delta, theta, alpha, beta, gamma = self._compute_band_powers(data_window)
+        else:
+            delta, theta, alpha, beta, gamma = self._latest_bands
+
+        delta, theta, alpha, beta, gamma = self._sanitize_bands(delta, theta, alpha, beta, gamma)
 
         if self.cfg.metric_mode == "openbci_focus":
             raw = self._openbci_focus_score(alpha, beta)
+            raw = self._stabilize_raw(raw)
             smoothed = self._update_ema(raw)
             metric = smoothed  # already in [0,1]
             metric = max(0.0, min(1.0, metric))
             alpha_uV = math.sqrt(max(alpha, 0.0) + self.cfg.eps)
             beta_uV = math.sqrt(max(beta, 0.0) + self.cfg.eps)
-            print(
-                f"Band powers: Δ={delta:.2f} Θ={theta:.2f} a={alpha:.2f} β={beta:.2f} g={gamma:.2f} |"
-                f" α_uV≈{alpha_uV:.2f} β_uV≈{beta_uV:.2f} |"
-                f" FocusRaw={raw:.3f} | Smoothed={smoothed:.3f} | Metric={metric:.3f}"
-            )
+            print(f"Metric={metric:.3f}")
             return metric
 
         raw = self._compute_raw_relaxation(delta, theta, alpha, beta, gamma)
+        raw = self._stabilize_raw(raw)
         smoothed = self._update_ema(raw)
         metric = self._sigmoid_scale(smoothed)
         metric = max(0.0, min(1.0, metric))  # clamp
 
-        print(
-            f"Band powers: Δ={delta:.2f} Θ={theta:.2f} a={alpha:.2f} β={beta:.2f} g={gamma:.2f} |"
-            f" Raw={raw:.3f} | Smoothed={smoothed:.3f} | Metric={metric:.3f}"
-        )
+        print(f"Metric={metric:.3f}")
         return metric
 
 # ---------------------------------------------------------------------------
@@ -269,6 +327,9 @@ class RelaxationVideo:
                     f"--screen={self.screen}",
                     "--loop-file=inf",
                     "--really-quiet",
+                    "--no-terminal",
+                    "--profile=sw-fast",
+                    "--video-sync=audio",
                     self.media_path,
                 ],
                 stdout=subprocess.DEVNULL,
@@ -292,14 +353,23 @@ class RelaxationVideo:
 def set_system_volume_percent(percent: int):
     """
     Set system volume on Linux using 'amixer' command.
+    Avoid redundant subprocess calls when the requested volume has not changed.
     """
+    global last_volume_percent
     try:
         pct = int(max(0, min(100, percent)))
-        subprocess.run(['amixer', 'sset', 'Master', f'{pct}%'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        return pct; 
+        if last_volume_percent == pct:
+            return pct
+        subprocess.run(
+            ['amixer', 'sset', 'Master', f'{pct}%'],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        last_volume_percent = pct
+        return pct
     except Exception:
-        pass
+        return last_volume_percent if last_volume_percent is not None else 0
 
 # -------preparing the board for streaming------
 
@@ -340,10 +410,10 @@ def run_eeg():
         metric_channels=None,  # use all EEG channels for the band-power metric
         window_sec=window_sec,
         # Make the metric less twitchy
-        smoothing_alpha=0.10,
+        smoothing_alpha=0.08,
 
         # For log_ab, the natural "neutral" point is near 0 (alpha ~= beta)
-        sigmoid_gain=4.0,
+        sigmoid_gain=3.0,
         sigmoid_center=0.0,
 
         # Choose one:
@@ -383,7 +453,9 @@ def run_eeg():
     window_metric = 0.0
     i = 0
     flag = True
+    set_system_volume_percent(30)
     video.start()
+    last_active_check = 0.0
 
     ui.NowPlayingLabel.setText("Now Playing: Flute Audio")
     ui.NowShowingLabel.setText("Now Showing: Flute Visual")
@@ -393,8 +465,8 @@ def run_eeg():
     MIN_VOL = 0.02   # very quiet
     MAX_VOL = 0.9    # safe comfortable cap
 
-    MIN_VOL_SYS = 20
-    MAX_VOL_SYS = 60 # edi
+    MIN_VOL_SYS = 40
+    MAX_VOL_SYS = 70 # edit
 
     print(f"Sampling rate: {sampling_rate} Hz, EEG channels: {eeg_channels}")
     print("Streaming… press Ctrl+C to stop.")
@@ -429,40 +501,43 @@ def run_eeg():
             # DO NOT DELETE 
             # this code block is for the active channel display in the GUI 
 
-            global channel_model
+            global channel_model, last_active_channels, last_debug_print_time
 
-            active_list = []
-            for ch in eeg_channels:
-                signal = np.array(data[ch], dtype=float)
+            now = time.time()
+            if now - last_active_check >= 1.0:
+                active_list = []
+                for ch in eeg_channels:
+                    signal = np.asarray(data[ch], dtype=float)
 
-                if signal.size < 10:
-                    continue
+                    if signal.size < 10:
+                        continue
 
-                std_val = np.std(signal)
-                ptp_val = np.ptp(signal)
-                diff_std = np.std(np.diff(signal))
+                    std_val = np.std(signal)
+                    ptp_val = np.ptp(signal)
+                    diff_std = np.std(np.diff(signal))
 
-                score = 0
+                    score = 0
 
-                if std_val > 1.0:
-                    score += 1
-                if std_val < 150.0:
-                    score += 1
-                if ptp_val < 1000:
-                    score += 1
-                if diff_std > 0.2:
-                    score += 1
+                    if std_val > 1.0:
+                        score += 1
+                    if std_val < 150.0:
+                        score += 1
+                    if ptp_val < 1000:
+                        score += 1
+                    if diff_std > 0.2:
+                        score += 1
 
-                if score >= 3:
-                    active_list.append(f"Channel {ch}")
+                    if score >= 3:
+                        active_list.append(f"Channel {ch}")
 
+                last_active_channels = active_list
+                last_active_check = now
 
-            if channel_model is not None:
-                channel_model.clear()
-                for name in active_list:
-                    item = QtGui.QStandardItem(name)
-                    channel_model.appendRow(item)
-                    
+                if channel_model is not None:
+                    channel_model.clear()
+                    for name in active_list:
+                        item = QtGui.QStandardItem(name)
+                        channel_model.appendRow(item)
             # DO NOT DELETE 
             # this code block is for the active channel display in the GUI         
 
@@ -472,6 +547,7 @@ def run_eeg():
             current_bands = [delta, theta, alpha, beta, gamma]
 
             metric = relax.update(data)
+            relax._latest_bands = None
             current_metric = metric
 
             is_relaxed = metric > 0.7  # you can tweak this threshold
@@ -487,10 +563,12 @@ def run_eeg():
 
             # -------------- PROGRAM START HERE ! ----------------
             else:
-                vol_sys = 20
+                vol_sys = 30
                 set_system_volume_percent(vol_sys)
                 
-            print(f"Relaxation metric: {metric:.3f}  |  relaxed={is_relaxed} |  system volume={vol_sys}%  | current video={video.media_path}")
+            if now - last_debug_print_time >= 1.0:
+                print(f"Relaxation metric: {metric:.3f}  |  relaxed={is_relaxed} |  system volume={vol_sys}%  | current video={video.media_path}")
+                last_debug_print_time = now
 
             window_metric += metric
             i += 1
@@ -562,6 +640,9 @@ if __name__ == "__main__":
     scroll = QtWidgets.QScrollArea()
     scroll.setWidget(old_widget)
     scroll.setWidgetResizable(False)
+    scroll.viewport().setAttribute(Qt.WA_AcceptTouchEvents, True)
+    scroll.setAttribute(Qt.WA_AcceptTouchEvents, True)
+    QScroller.grabGesture(scroll.viewport(), QScroller.TouchGesture)
 
     scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
     scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
@@ -569,8 +650,9 @@ if __name__ == "__main__":
 
     old_widget.adjustSize()
 
-    screen = app.primaryScreen().availableGeometry()
-    MainWindow.resize(int(screen.width()*0.9), int(screen.height()*0.9)) 
+    screen = get_screen_geometry(app, preferred_index=0)
+    MainWindow.resize(int(screen.width()*0.9), int(screen.height()*0.9))
+    MainWindow.move(screen.x(), screen.y())
 
     #MainWindow.show()
     audio_names = [
@@ -635,25 +717,25 @@ if __name__ == "__main__":
     layout = QtWidgets.QVBoxLayout(ui.PSDBarPlot)
     layout.addWidget(canvas)
     bands = ["Delta", "Theta", "Alpha", "Beta", "Gamma"]
+    bar_container = ax.bar(bands, current_bands)
+    ax.set_ylabel("Power")
+    ax.set_title("EEG Band Powers")
 
     plot_timer = QtCore.QTimer()
 
     # plot the band powers in the GUI, updated every 0.5 seconds. Uses the global variable current_bands which is updated in the EEG loop.
     def update_plot():
-
-        ax.clear()
-
         values = current_bands
+        ymax = max(1.0, max(values) * 1.15)
 
-        ax.bar(bands, values)
+        for bar, value in zip(bar_container, values):
+            bar.set_height(value)
 
-        ax.set_ylabel("Power")
-        ax.set_title("EEG Band Powers")
-
-        canvas.draw()
+        ax.set_ylim(0, ymax)
+        canvas.draw_idle()
 
     plot_timer.timeout.connect(update_plot)
-    plot_timer.start(200)
+    plot_timer.start(500)
     timer = QtCore.QTimer()
     
     quotes = [
@@ -759,6 +841,9 @@ if __name__ == "__main__":
         stats_scroll = QtWidgets.QScrollArea()
         stats_scroll.setWidget(old_widget_stats)
         stats_scroll.setWidgetResizable(False)
+        stats_scroll.viewport().setAttribute(Qt.WA_AcceptTouchEvents, True)
+        stats_scroll.setAttribute(Qt.WA_AcceptTouchEvents, True)
+        QScroller.grabGesture(stats_scroll.viewport(), QScroller.TouchGesture)
 
         stats_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         stats_scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
@@ -766,8 +851,9 @@ if __name__ == "__main__":
 
         old_widget_stats.adjustSize()
 
-        screen = app.primaryScreen().availableGeometry()
-        stats_window.resize(int(screen.width()*0.9), int(screen.height()*0.9)) 
+        screen = get_screen_geometry(app, preferred_index=0)
+        stats_window.resize(int(screen.width()*0.9), int(screen.height()*0.9))
+        stats_window.move(screen.x(), screen.y())
             # Calculations
         total_time = session_seconds
         total_minutes = round(total_time / 60)
@@ -901,6 +987,7 @@ if __name__ == "__main__":
      session_metric_data.append(current_metric)
      session_media_data.append(audio_names[pos])
      session_band_data.append(current_bands.copy())
+     session_volume_data.append(vol_sys)
 
 
     
