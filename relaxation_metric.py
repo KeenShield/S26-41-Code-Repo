@@ -29,7 +29,7 @@ from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
 
 # for the GUI 
 from ActualUI import Ui_MainWindow
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtWidgets import QScroller
 from PyQt5.QtCore import Qt 
 
@@ -45,6 +45,40 @@ def get_screen_geometry(app, preferred_index=0):
     if screens and 0 <= preferred_index < len(screens):
         return screens[preferred_index].availableGeometry()
     return app.primaryScreen().availableGeometry()
+
+def build_scaled_view(widget, target_rect, fill=0.98):
+    """
+    Put a normal QWidget into a QGraphicsView so the entire designed UI can be
+    uniformly scaled down to fit smaller screens while still allowing touch
+    scrolling when needed.
+    """
+    scene = QtWidgets.QGraphicsScene()
+    proxy = scene.addWidget(widget)
+
+    base_size = widget.sizeHint()
+    if not base_size.isValid():
+        base_size = widget.size()
+
+    base_w = max(1, base_size.width())
+    base_h = max(1, base_size.height())
+    avail_w = max(1, int(target_rect.width() * fill))
+    avail_h = max(1, int(target_rect.height() * fill))
+
+    scale = min(avail_w / base_w, avail_h / base_h, 1.0)
+    proxy.setTransform(QtGui.QTransform().scale(scale, scale))
+
+    scene.setSceneRect(0, 0, base_w * scale, base_h * scale)
+
+    view = QtWidgets.QGraphicsView(scene)
+    view.setFrameShape(QtWidgets.QFrame.NoFrame)
+    view.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+    view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+    view.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+    view.viewport().setAttribute(Qt.WA_AcceptTouchEvents, True)
+    view.setAttribute(Qt.WA_AcceptTouchEvents, True)
+    QScroller.grabGesture(view.viewport(), QScroller.TouchGesture)
+
+    return view, scale
 
 # global variable to hold the current relaxation metric (for demonstration/logging purposes)
 current_metric = 0.0
@@ -399,7 +433,7 @@ def run_eeg():
     board.start_stream()  # you can pass a buffer size or streamer if you want
 
     sampling_rate = BoardShim.get_sampling_rate(board_id)  # should be 125 Hz
-    eeg_channels = BoardShim.get_eeg_channels(board_id)    # 16 EEG channels
+    eeg_channels = BoardShim.get_eeg_channels(board_id)[:8]    # force software to use only the first 8 EEG channels
 
     window_sec = 10.0
     num_samples = int(sampling_rate * window_sec)
@@ -407,7 +441,7 @@ def run_eeg():
     cfg = RelaxationConfig(
         sampling_rate=sampling_rate,
         eeg_channels=eeg_channels,
-        metric_channels=None,  # use all EEG channels for the band-power metric
+        metric_channels=eeg_channels,  # force the metric to use only the selected 8 EEG channels
         window_sec=window_sec,
         # Make the metric less twitchy
         smoothing_alpha=0.08,
@@ -457,8 +491,8 @@ def run_eeg():
     video.start()
     last_active_check = 0.0
 
-    ui.NowPlayingLabel.setText("Now Playing: Flute Audio")
-    ui.NowShowingLabel.setText("Now Showing: Flute Visual")
+    ui.NowPlayingLabel.setText("Now Playing: Handpan Audio")
+    ui.NowShowingLabel.setText("Now Showing: RGB Visual")
 
     metric_scores = [0.0, 0.0, 0.0, 0.0]
 
@@ -468,7 +502,7 @@ def run_eeg():
     MIN_VOL_SYS = 40
     MAX_VOL_SYS = 70 # edit
 
-    print(f"Sampling rate: {sampling_rate} Hz, EEG channels: {eeg_channels}")
+    print(f"Sampling rate: {sampling_rate} Hz, using 8 EEG channels: {eeg_channels}")
     print("Streaming… press Ctrl+C to stop.")
     print("Calibrating (~20 sec per tone)")
 
@@ -588,20 +622,20 @@ def run_eeg():
                 video = videos[pos]
                 # This is logic to display the current audio / Visual in the GUI
                 if pos == 0:
-                    ui.NowPlayingLabel.setText("Now Playing: Flute Audio")
-                    ui.NowShowingLabel.setText("Now Showing: Flute Visual")
+                    ui.NowPlayingLabel.setText("Now Playing: Handpan Audio")
+                    ui.NowShowingLabel.setText("Now Showing: RGB Pattern Visual")
 
                 elif pos == 1:
-                    ui.NowPlayingLabel.setText("Now Playing: Night Audio")
-                    ui.NowShowingLabel.setText("Now Showing: Night Visual")
+                    ui.NowPlayingLabel.setText("Now Playing: Ocean Audio")
+                    ui.NowShowingLabel.setText("Now Showing: Jellyfish Visual")
 
                 elif pos == 2:
-                    ui.NowPlayingLabel.setText("Now Playing: Visual Distortion Audio")
-                    ui.NowShowingLabel.setText("Now Showing: Visual Distortion")
+                    ui.NowPlayingLabel.setText("Now Playing: Flute Audio")
+                    ui.NowShowingLabel.setText("Now Showing: Lava Lamp Distortion")
 
                 elif pos == 3:
-                    ui.NowPlayingLabel.setText("Now Playing: Waterfall Audio")
-                    ui.NowShowingLabel.setText("Now Showing: Waterfall Visual")
+                    ui.NowPlayingLabel.setText("Now Playing: Chimes Audio")
+                    ui.NowShowingLabel.setText("Now Showing: Monocolor Pattern Visual")
                 video.start()
 
             time.sleep(0.2)  # update ~5x per second
@@ -639,7 +673,10 @@ if __name__ == "__main__":
 
     scroll = QtWidgets.QScrollArea()
     scroll.setWidget(old_widget)
-    scroll.setWidgetResizable(False)
+    scroll.setWidgetResizable(True)
+    screen = get_screen_geometry(app, preferred_index=0)
+    MainWindow.resize(int(screen.width()*0.1), int(screen.height()*0.1))
+
     scroll.viewport().setAttribute(Qt.WA_AcceptTouchEvents, True)
     scroll.setAttribute(Qt.WA_AcceptTouchEvents, True)
     QScroller.grabGesture(scroll.viewport(), QScroller.TouchGesture)
@@ -648,10 +685,10 @@ if __name__ == "__main__":
     scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
     MainWindow.setCentralWidget(scroll)
 
-    old_widget.adjustSize()
+    #old_widget.adjustSize()
 
-    screen = get_screen_geometry(app, preferred_index=0)
-    MainWindow.resize(int(screen.width()*0.9), int(screen.height()*0.9))
+    
+   # MainWindow.resize(int(screen.width()*0.1), int(screen.height()*0.1))
     MainWindow.move(screen.x(), screen.y())
 
     #MainWindow.show()
@@ -847,7 +884,7 @@ if __name__ == "__main__":
 
         stats_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         stats_scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        stats_window.setCentralWidget(scroll)
+        stats_window.setCentralWidget(stats_scroll)
 
         old_widget_stats.adjustSize()
 
