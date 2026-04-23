@@ -635,24 +635,24 @@ if __name__ == "__main__":
     # For the active channel display, use the number of samples to determine if a channel is active or not
 
     ui.setupUi(MainWindow) # allows for the setup from ActualUI.py to be used in this file
-    old_widget= MainWindow.centralWidget()
+   old_widget = MainWindow.centralWidget()
 
-    scroll = QtWidgets.QScrollArea()
-    scroll.setWidget(old_widget)
-    scroll.setWidgetResizable(False)
-    scroll.viewport().setAttribute(Qt.WA_AcceptTouchEvents, True)
-    scroll.setAttribute(Qt.WA_AcceptTouchEvents, True)
-    QScroller.grabGesture(scroll.viewport(), QScroller.TouchGesture)
-
-    scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-    scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-    MainWindow.setCentralWidget(scroll)
-
-    old_widget.adjustSize()
-
-    screen = get_screen_geometry(app, preferred_index=0)
-    MainWindow.resize(int(screen.width()*0.9), int(screen.height()*0.9))
-    MainWindow.move(screen.x(), screen.y())
+   screen = get_screen_geometry(app, preferred_index=0)
+   
+   scaled_view, scale = build_scaled_view(
+       old_widget,
+       screen,
+       fill=0.72
+   )
+   
+   MainWindow.setCentralWidget(scaled_view)
+   
+   MainWindow.resize(
+       int(screen.width() * 0.78),
+       int(screen.height() * 0.78)
+   )
+   
+   MainWindow.move(screen.x(), screen.y())
 
     #MainWindow.show()
     audio_names = [
