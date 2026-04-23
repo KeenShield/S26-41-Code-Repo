@@ -673,8 +673,9 @@ if __name__ == "__main__":
 
     scroll = QtWidgets.QScrollArea()
     scroll.setWidget(old_widget)
-    scroll.setWidgetResizable(True)
+    scroll.setWidgetResizable(False)
     screen = get_screen_geometry(app, preferred_index=0)
+
     MainWindow.resize(int(screen.width()*0.1), int(screen.height()*0.1))
 
     scroll.viewport().setAttribute(Qt.WA_AcceptTouchEvents, True)
@@ -1105,6 +1106,9 @@ if __name__ == "__main__":
     log_timer.start(1000)
      
     MainWindow.show()
+
+    QtCore.QTimer.singleShot(0, lambda: MainWindow.resize(200,200))
+
 
     sys.exit(app.exec_())
 
