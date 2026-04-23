@@ -1107,8 +1107,6 @@ if __name__ == "__main__":
      
     MainWindow.show()
 
-    QtCore.QTimer.singleShot(0, lambda: MainWindow.resize(200,200))
-
 
     sys.exit(app.exec_())
 
