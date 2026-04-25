@@ -60,13 +60,10 @@ This is an EEG-based biofeedback relaxation system that streams real-time brainw
   - Contains frame placeholders for relaxation vs time and audio vs time graphs
 
 - **tempUIStats.py**: Alternative/temporary session statistics UI
-  - Similar to SessionStats.py with minor layout differences
-  - Shows session duration, time relaxed, and average relaxation score
-  - Displays "Most Engaging Audio"
-  - Contains Close and Redo Session buttons
+  - Used as a temp placeholder for pyuic5 command line generated code for SessionStats.py
 
 - **tempUIplacer.py**: Duplicate/temporary version of the main session UI
-  - Used to place pyuic5 command line generated code
+  - Used as a temp placeholder for pyuic5 command line generated code for ActualUi.py
  
 
 - **Flow.ui**: Qt Designer XML layout file for the main session interface
@@ -140,4 +137,4 @@ Team S26-41 members should follow the project's contribution guidelines.
 
 ## Contact
 
-For questions or inquiries, contact the S26-41 Capstone team.
+For questions or inquiries, contact Dr. Leyla Nazhandali.
