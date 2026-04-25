@@ -66,8 +66,8 @@ This is an EEG-based biofeedback relaxation system that streams real-time brainw
   - Contains Close and Redo Session buttons
 
 - **tempUIplacer.py**: Duplicate/temporary version of the main session UI
-  - Nearly identical to ActualUI.py
-  - May be used for testing or development purposes
+  - Used to place pyuic5 command line generated code
+ 
 
 - **Flow.ui**: Qt Designer XML layout file for the main session interface
   - Contains visual layout specifications for ActualUI.py and tempUIplacer.py
